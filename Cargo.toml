@@ -1,0 +1,21 @@
+[package]
+name = "timezonefinder"
+version = "0.1.0"
+authors = ["Andrew Fitzgerald <andrewcfitzgerald@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+geo = "*"
+dbase = "*"
+geo-types = "*"
+
+
+[dependencies.shapefile]
+features=["geo-types"]
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "benchmark"
+harness = false
