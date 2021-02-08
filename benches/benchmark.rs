@@ -1,5 +1,5 @@
-#[path = "../src/lib.rs"]
-mod timezone_finder;
+use timezonefinder;
+use timezonefinder::TimezoneFinder;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
@@ -11,7 +11,7 @@ struct Input {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let tz = timezone_finder::TimezoneFinder::new();
+    let tz = timezonefinder::BucketedTimezoneFinder::new();
 
     let inputs = vec![
         Input {
@@ -37,6 +37,13 @@ fn criterion_benchmark(c: &mut Criterion) {
             lon: 151.2093,
             lat: -33.8688,
             tz: "Australia/Sydney".to_string(),
+        },
+        Input {
+            // Discovered via fuzz testing, time zone has a very small bounding box and only shows up in one bucket.
+            location: "Gaza".to_string(),
+            lon: 34.28092229445389,
+            lat: 31.665431986413495,
+            tz: "Asia/Gaza".to_string(),
         },
     ];
     let mut group = c.benchmark_group("lookups");

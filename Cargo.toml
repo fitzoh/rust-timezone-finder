@@ -15,6 +15,7 @@ features=["geo-types"]
 
 [dev-dependencies]
 criterion = "0.3"
+rand = "*"
 
 [[bench]]
 name = "benchmark"
