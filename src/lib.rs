@@ -64,17 +64,19 @@ impl TimezoneFinder for SimpleTimezoneFinder {
 }
 
 pub struct BucketedTimezoneFinder {
-    timezones: Vec<Bucket>,
+    timezones: Vec<Vec<Bucket>>,
 }
 
 type Bucket = Vec<Rc<Timezone>>;
 
 impl BucketedTimezoneFinder {
-    const BUCKETS: usize = 361;
+    const LON_BUCKETS: usize = 361;
+    const LAT_BUCKETS: usize = 181;
 
-    fn bucket(lon: f64) -> usize {
+    fn bucket(lon: f64, lat: f64) -> (usize, usize) {
         let normalized_lon = (lon + 180.0) as usize;
-        normalized_lon
+        let normalized_lat = (lat + 90.0) as usize;
+        (normalized_lon, normalized_lat)
     }
 
     pub fn new() -> BucketedTimezoneFinder {
@@ -82,10 +84,14 @@ impl BucketedTimezoneFinder {
     }
 
     pub fn from_path(path: String) -> BucketedTimezoneFinder {
-        let mut buckets: Vec<Vec<Rc<Timezone>>> = (0..BucketedTimezoneFinder::BUCKETS)
-            .map(|_| vec![])
-            .collect();
-
+        let mut buckets: Vec<Vec<Bucket>> = Vec::new();
+        for _ in 0..BucketedTimezoneFinder::LON_BUCKETS{
+            let mut bucket = Vec::new();
+            for _ in 0..BucketedTimezoneFinder::LAT_BUCKETS{
+                 bucket.push(Vec::new())
+            }
+            buckets.push(bucket);
+        }
         let reader = shapefile::Reader::from_path(path).unwrap();
         let iter = reader.iter_shapes_and_records_as::<Polygon>().unwrap();
 
@@ -95,10 +101,13 @@ impl BucketedTimezoneFinder {
 
         for timezone in timezones {
             let bbox = timezone.shape.bounding_rect().unwrap();
-            let min_bucket = BucketedTimezoneFinder::bucket(bbox.min().x);
-            let max_bucket = BucketedTimezoneFinder::bucket(bbox.max().x);
-            for i in min_bucket..=max_bucket {
-                buckets.get_mut(i).unwrap().push(timezone.clone())
+            let (min_lon, min_lat) = BucketedTimezoneFinder::bucket(bbox.min().x, bbox.min().y);
+            let (max_lon, max_lat) = BucketedTimezoneFinder::bucket(bbox.max().x, bbox.max().y);
+            for lat in min_lon..=max_lon {
+                for lon in min_lat..=max_lat{
+                    buckets.get_mut(lat).unwrap().get_mut(lon).unwrap().push(timezone.clone())
+
+                }
             }
         }
 
@@ -109,8 +118,8 @@ impl BucketedTimezoneFinder {
 impl TimezoneFinder for BucketedTimezoneFinder {
     fn find(&self, lon: f64, lat: f64) -> Option<String> {
         let point: Point<f64> = (lon, lat).into();
-        let bucket = BucketedTimezoneFinder::bucket(lon);
-        for tz in self.timezones[bucket].iter() {
+        let (lon_bucket, lat_bucket) = BucketedTimezoneFinder::bucket(lon, lat);
+        for tz in self.timezones[lon_bucket][lat_bucket].iter() {
             if tz.shape.contains(&point) {
                 return Some(tz.id.clone());
             }
