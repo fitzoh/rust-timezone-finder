@@ -10,8 +10,6 @@ dbase = "*"
 geo-types = "*"
 geojson = {version="*",features=["geo-types"]}
 
-
-
 [dev-dependencies]
 criterion = "0.3"
 rand = "*"

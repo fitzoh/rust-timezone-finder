@@ -3,8 +3,9 @@ use geo::contains::Contains;
 use geo_types::{MultiPolygon, Point};
 use geojson::{Feature, FeatureCollection, GeoJson};
 use std::convert::{TryFrom, TryInto};
-use std::fs::read_to_string;
 use std::rc::Rc;
+
+static TIMEZONE_DATA: &'static str = include_str!("../tzdata/combined.json");
 
 struct Timezone {
     // The timezone ID ("America/New_York")
@@ -42,11 +43,7 @@ pub struct SimpleTimezoneFinder {
 
 impl SimpleTimezoneFinder {
     pub fn new() -> SimpleTimezoneFinder {
-        SimpleTimezoneFinder::from_path("tzdata/combined.json".into())
-    }
-
-    pub fn from_path(path: String) -> SimpleTimezoneFinder {
-        let geojson = read_to_string(path).unwrap().parse::<GeoJson>().unwrap();
+        let geojson = TIMEZONE_DATA.parse::<GeoJson>().unwrap();
         let features = FeatureCollection::try_from(geojson).unwrap();
 
         let timezones: Vec<Timezone> = features
@@ -88,10 +85,6 @@ impl BucketedTimezoneFinder {
     }
 
     pub fn new() -> BucketedTimezoneFinder {
-        BucketedTimezoneFinder::from_path("tzdata/combined.json".into())
-    }
-
-    pub fn from_path(path: String) -> BucketedTimezoneFinder {
         let mut buckets: Vec<Vec<Bucket>> = Vec::new();
         for _ in 0..BucketedTimezoneFinder::LON_BUCKETS {
             let mut bucket = Vec::new();
@@ -100,7 +93,7 @@ impl BucketedTimezoneFinder {
             }
             buckets.push(bucket);
         }
-        let geojson = read_to_string(path).unwrap().parse::<GeoJson>().unwrap();
+        let geojson = TIMEZONE_DATA.parse::<GeoJson>().unwrap();
         let features = FeatureCollection::try_from(geojson).unwrap();
 
         let timezones: Vec<Rc<Timezone>> = features
