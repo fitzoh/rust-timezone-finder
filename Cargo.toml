@@ -8,10 +8,9 @@ edition = "2018"
 geo = "*"
 dbase = "*"
 geo-types = "*"
+geojson = {version="*",features=["geo-types"]}
 
 
-[dependencies.shapefile]
-features=["geo-types"]
 
 [dev-dependencies]
 criterion = "0.3"

@@ -1,8 +1,9 @@
 use geo::bounding_rect::BoundingRect;
 use geo::contains::Contains;
 use geo_types::{MultiPolygon, Point};
-use shapefile::dbase::{FieldValue, Record};
-use shapefile::Polygon;
+use geojson::{Feature, FeatureCollection, GeoJson};
+use std::convert::{TryFrom, TryInto};
+use std::fs::read_to_string;
 use std::rc::Rc;
 
 struct Timezone {
@@ -12,16 +13,20 @@ struct Timezone {
 }
 
 impl Timezone {
-    fn from_shape_record_tuple((shape, record): (Polygon, Record)) -> Timezone {
-        fn tz_id_from_record(record: Record) -> String {
-            match record.get("tzid").unwrap() {
-                FieldValue::Character(Some(tzid)) => tzid.clone(),
-                _ => panic!("tzid not found"),
+    fn from_geojson_feature(feature: Feature) -> Timezone {
+        let id = feature.property("tzid").unwrap().as_str().unwrap();
+        let id = id.parse().unwrap();
+        let geom = feature.geometry.clone().unwrap();
+        let geom: geo_types::Geometry<f64> = geom.try_into().unwrap();
+        match geom {
+            geo_types::Geometry::MultiPolygon(shape) => Timezone { id, shape },
+            geo_types::Geometry::Polygon(shape) => Timezone {
+                id,
+                shape: shape.into(),
+            },
+            _ => {
+                panic!("invalid geometry type")
             }
-        }
-        Timezone {
-            id: tz_id_from_record(record),
-            shape: shape.into(),
         }
     }
 }
@@ -37,14 +42,17 @@ pub struct SimpleTimezoneFinder {
 
 impl SimpleTimezoneFinder {
     pub fn new() -> SimpleTimezoneFinder {
-        SimpleTimezoneFinder::from_path("tzdata/combined-shapefile.shp".into())
+        SimpleTimezoneFinder::from_path("tzdata/combined.json".into())
     }
 
     pub fn from_path(path: String) -> SimpleTimezoneFinder {
-        let reader = shapefile::Reader::from_path(path).unwrap();
-        let iter = reader.iter_shapes_and_records_as::<Polygon>().unwrap();
-        let timezones: Vec<Timezone> = iter
-            .map(|tuple| Timezone::from_shape_record_tuple(tuple.unwrap()))
+        let geojson = read_to_string(path).unwrap().parse::<GeoJson>().unwrap();
+        let features = FeatureCollection::try_from(geojson).unwrap();
+
+        let timezones: Vec<Timezone> = features
+            .features
+            .iter()
+            .map(|feature| Timezone::from_geojson_feature(feature.clone()))
             .collect();
 
         SimpleTimezoneFinder { timezones }
@@ -80,23 +88,25 @@ impl BucketedTimezoneFinder {
     }
 
     pub fn new() -> BucketedTimezoneFinder {
-        BucketedTimezoneFinder::from_path("tzdata/combined-shapefile.shp".into())
+        BucketedTimezoneFinder::from_path("tzdata/combined.json".into())
     }
 
     pub fn from_path(path: String) -> BucketedTimezoneFinder {
         let mut buckets: Vec<Vec<Bucket>> = Vec::new();
-        for _ in 0..BucketedTimezoneFinder::LON_BUCKETS{
+        for _ in 0..BucketedTimezoneFinder::LON_BUCKETS {
             let mut bucket = Vec::new();
-            for _ in 0..BucketedTimezoneFinder::LAT_BUCKETS{
-                 bucket.push(Vec::new())
+            for _ in 0..BucketedTimezoneFinder::LAT_BUCKETS {
+                bucket.push(Vec::new())
             }
             buckets.push(bucket);
         }
-        let reader = shapefile::Reader::from_path(path).unwrap();
-        let iter = reader.iter_shapes_and_records_as::<Polygon>().unwrap();
+        let geojson = read_to_string(path).unwrap().parse::<GeoJson>().unwrap();
+        let features = FeatureCollection::try_from(geojson).unwrap();
 
-        let timezones: Vec<Rc<Timezone>> = iter
-            .map(|tuple| Rc::new(Timezone::from_shape_record_tuple(tuple.unwrap())))
+        let timezones: Vec<Rc<Timezone>> = features
+            .features
+            .iter()
+            .map(|feature| Rc::new(Timezone::from_geojson_feature(feature.clone())))
             .collect();
 
         for timezone in timezones {
@@ -104,9 +114,13 @@ impl BucketedTimezoneFinder {
             let (min_lon, min_lat) = BucketedTimezoneFinder::bucket(bbox.min().x, bbox.min().y);
             let (max_lon, max_lat) = BucketedTimezoneFinder::bucket(bbox.max().x, bbox.max().y);
             for lat in min_lon..=max_lon {
-                for lon in min_lat..=max_lat{
-                    buckets.get_mut(lat).unwrap().get_mut(lon).unwrap().push(timezone.clone())
-
+                for lon in min_lat..=max_lat {
+                    buckets
+                        .get_mut(lat)
+                        .unwrap()
+                        .get_mut(lon)
+                        .unwrap()
+                        .push(timezone.clone())
                 }
             }
         }
